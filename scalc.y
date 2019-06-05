@@ -24,25 +24,6 @@ typedef struct {
 } symbol;
 
 
-/* no para a arvore sintatica
- *
- */
-
-enum syntno_type { NO_ADD=0, NO_SUB, NO_MULT, NO_DIV, NO_PAR, NO_STMTS, NO_STMT, NO_UNA,
-  NO_ATTR, NO_TOK, NO_PRNT};
-
-struct syntno {
-	short id;
-	enum syntno_type type;
-	char token;
-	void *token_args;
-	short childcount;
-	//...
-	struct syntno *children[1]; // manter no ultimo campo	
-};
-
-typedef struct syntno syntno;
-
 symbol synames[100];
 int sycount = 0;
 
@@ -72,95 +53,96 @@ targs *copy_targs(const targs a);
 
 %%
 
-program : stmts			{ print_symbols();
+program : stmts	{ print_symbols();
+				  visitor_leaf_first(&($1), collapse_stmts);
 				  print_tree($1);
 				}
-	;
+		;
 
 stmts	: stmt ';' stmts	{ syntno *u = create_no('S', NO_STMTS, 2);
-				  u->children[0] = $1;
-				  u->children[1] = $3;
-				  $$ = u;
-				}
-	| stmt ';'		{ syntno *u = create_no('s', NO_STMT, 1);
-				  u->children[0] = $1;
-				  $$ = u;
-				}
-	;
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| stmt ';'			{ syntno *u = create_no('s', NO_STMT, 1);
+							  u->children[0] = $1;
+							  $$ = u;
+							}
+		;
 
 
 stmt	: VAR '=' arit		{ add_symbol($1.varname, $1.line, $1.col); 
-				  syntno *u = create_no('A', NO_ATTR, 2);
+							  syntno *u = create_no('A', NO_ATTR, 2);
 
-				  syntno *uvar = create_no('V', NO_TOK, 0);
-				  uvar->token_args = copy_targs($1);
-				  u->children[0] = uvar;
+							  syntno *uvar = create_no('V', NO_TOK, 0);
+							  uvar->token_args = copy_targs($1);
+							  u->children[0] = uvar;
 
-				  u->children[1] = $3;
-				  $$ = u;
-				} 
-	| print			{ $$ = $1; }
-	| error			{ }
-	;
+							  u->children[1] = $3;
+							  $$ = u;
+							} 
+		| print				{ $$ = $1; }
+		| error				{ }
+		;
 
-print	: PRINT VAR		{ syntno *u = create_no('P', NO_PRNT, 0);
-				  u->token_args = copy_targs($2);
-				  $$ = u;
-				}
-	;
+print	: PRINT VAR			{ syntno *u = create_no('P', NO_PRNT, 0);
+							  u->token_args = copy_targs($2);
+							  $$ = u;
+							}
+		;
 
 
 arit	: arit '+' term		{ syntno *u = create_no('+', NO_ADD, 2);
-				  u->children[0] = $1;
-				  u->children[1] = $3;
-				  $$ = u;
-				}
-	| arit '-' term		{ syntno *u = create_no('-', NO_SUB, 2);
-				  u->children[0] = $1;
-				  u->children[1] = $3;
-				  $$ = u;
-				}
-	| term			{ $$ = $1; }
-	;
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| arit '-' term		{ syntno *u = create_no('-', NO_SUB, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| term				{ $$ = $1; }
+		;
 
 term	: term '*' factor	{ syntno *u = create_no('*', NO_MULT, 2);
-				  u->children[0] = $1;
-				  u->children[1] = $3;
-				  $$ = u;
-				}
-	| term '/' factor	{ syntno *u = create_no('/', NO_DIV, 2);
-				  u->children[0] = $1;
-				  u->children[1] = $3;
-				  $$ = u;
-				}
-	| factor		{ $$ = $1; }
-	;
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| term '/' factor	{ syntno *u = create_no('/', NO_DIV, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| factor			{ $$ = $1; }
+		;
 
 factor	: '(' arit ')'		{ /*syntno *u = create_no('p', NO_PAR, 1);
-				  u->children[0] = $2;
-				  $$ = u;*/
-				  $$ = $2;
-				}
-	| INT			{ syntno *u = create_no('I', NO_TOK, 0);
-				  u->token_args = copy_targs($1);
-				  $$ = u;
-				}
-	| DBL			{ syntno *u = create_no('D', NO_TOK, 0);
-				  u->token_args = copy_targs($1);
-				  $$ = u;
-				}
-	| VAR			{ syntno *u = create_no('V', NO_TOK, 0);
-				  u->token_args = copy_targs($1);
-				  $$ = u;
-				}
-	| unary			{ $$ = $1; }
+							  u->children[0] = $2;
+							  $$ = u;*/
+							  $$ = $2;
+							}
+	| INT					{ syntno *u = create_no('I', NO_TOK, 0);
+							  u->token_args = copy_targs($1);
+							  $$ = u;
+							}
+	| DBL					{ syntno *u = create_no('D', NO_TOK, 0);
+							  u->token_args = copy_targs($1);
+							  $$ = u;
+							}
+	| VAR					{ syntno *u = create_no('V', NO_TOK, 0);
+							  u->token_args = copy_targs($1);
+							  $$ = u;
+							}
+	| unary					{ $$ = $1; }
 	;
 
 unary	: '-' factor		{ syntno *u = create_no('-', NO_UNA, 1);
-				  u->children[0] = $2;
-				  $$ = u;
-				}
-	;
+							  u->children[0] = $2;
+							  $$ = u;
+							}
+		;
 
 %%
 
