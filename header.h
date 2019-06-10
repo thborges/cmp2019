@@ -37,5 +37,8 @@ void visitor_leaf_first(syntno **root, visitor_action act);
 // visitante que elimina os stmts da arvore
 void collapse_stmts(syntno **root, syntno *no);
 
+// visitante que verifica declaracao de variáveis
+void declared_vars(syntno **root, syntno *no);
+
 #endif
 
