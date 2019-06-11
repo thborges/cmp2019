@@ -38,14 +38,24 @@ void collapse_stmts(syntno **root, syntno *no) {
 
 void declared_vars(syntno **root, syntno *no) {
 	// se o pai não é NO_ATTR e o no é do tipo 
-	// TOK_ID, verifica a existencia na tabela de símbolos
+	// NO_TOK e 'V', verifica a existencia na tabela de símbolos
 	syntno *nr = *root;
-	if (nr->type != NO_ATTR && no->type == NO_TOK && no->token == 'V') {
 
+	if (nr->type != NO_ATTR && no->type == NO_TOK && no->token == 'V') {
+		targs *args = no->token_args;
+		int s = search_symbol(args->varname);
+		if (s == -1 || !synames[s].exists) {
+			printf(":%d:%d: identifier %s undeclared.\n", 
+				args->line, args->col, args->varname);
+		}
 	}
 
-	// se o nó é NO_ATTR, marca a variável como declarado
+	// se o nó é NO_ATTR, marca a variável como declarada
 	if (no->type == NO_ATTR) {
+		targs *args = no->children[0]->token_args;
+		int s = search_symbol(args->varname);
+		if (s != -1)
+			synames[s].exists = true;
 	}
 }
 

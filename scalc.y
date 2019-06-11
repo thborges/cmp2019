@@ -11,25 +11,8 @@ extern FILE *yyin;
 int yyerror(const char *s);
 int yylex (void);
 
-/* tabela de simbolos
- * maximo 100 simbolos
- * nome simbolo maximo 10 caracteres
- * nao otimizada. Deveria usar hash ou pelo menos
- * busca binaria.
- */
-typedef struct {
-	char name[11];
-	int line;
-	int col;
-} symbol;
-
-
-symbol synames[100];
 int sycount = 0;
 
-void add_symbol(const char *varname, int line, int col);
-int  search_symbol(const char *varname);
-void print_symbols();
 syntno *create_no(const char name, enum syntno_type t, short children); 
 void print_tree(syntno *root);
 targs *copy_targs(const targs a);
@@ -53,9 +36,16 @@ targs *copy_targs(const targs a);
 
 %%
 
-program : stmts	{ print_symbols();
+program : stmts	{ //print_symbols();
 				  visitor_leaf_first(&($1), collapse_stmts);
-				  print_tree($1);
+				  visitor_leaf_first(&($1), declared_vars);
+
+				  // gera codigo
+				  setup_llvm_global();
+				  visitor_leaf_first(&($1), generate_llvm_node);
+				  print_llvm_ir();
+
+				  //print_tree($1);
 				}
 		;
 
@@ -138,7 +128,7 @@ factor	: '(' arit ')'		{ /*syntno *u = create_no('p', NO_PAR, 1);
 	| unary					{ $$ = $1; }
 	;
 
-unary	: '-' factor		{ syntno *u = create_no('-', NO_UNA, 1);
+unary	: '-' factor		{ syntno *u = create_no('U', NO_UNA, 1);
 							  u->children[0] = $2;
 							  $$ = u;
 							}
@@ -178,6 +168,8 @@ void add_symbol(const char *varname, int line, int col) {
 		strncpy(synames[sycount].name, varname, 10);
 		synames[sycount].line = line;
 		synames[sycount].col = col;
+		synames[sycount].exists = false; // usado na analise semantica
+		synames[sycount].llvm = NULL;
 		sycount++;
 	}
 }
