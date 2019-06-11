@@ -26,12 +26,15 @@ static const char *node_names[] = {
 	"NO_ATTR", "NO_TOK", "NO_PRNT", "NO_WHILE", "<", ">", "<=", ">=", "==", "!=", 
     "OR", "AND", "IF", "OUT", "IN", "DELAY", "FUNC", "CALL"};
 
+enum language_types {LT_NONE, LT_INT, LT_FLOAT};
+
 struct syntno {
 	short id;
 	enum syntno_type type;
 	char token;
 	targs *token_args;
 	short childcount;
+	enum language_types dt; // data type
 	//...
 	struct syntno *children[1]; // manter no ultimo campo	
 };
@@ -55,6 +58,7 @@ typedef struct {
 extern int error_count;
 extern symbol synames[100];
 extern char *filename;
+
 void add_symbol(const char *varname, int line, int col);
 int  search_symbol(const char *varname);
 void print_symbols();
