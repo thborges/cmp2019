@@ -11,5 +11,17 @@ all:
 test:
 	./scalc teste02.txt
 
+stdc.o : stdc.c
+	gcc -c stdc.c
+
+%.ll : %.txt
+	./scalc $< > $@
+
+%.s : %.ll
+	llc $< -o $@ -filetype=asm
+
+% : %.s stdc.o
+	gcc -o $@ $< stdc.o
+
 #.SILENT:
 
