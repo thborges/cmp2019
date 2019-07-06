@@ -2,6 +2,8 @@
 #ifndef HEADER_H
 #define HEADER_H
 
+#define ENABLE_ARDUINO
+
 #include <stdbool.h>
 
 typedef struct {
@@ -16,7 +18,8 @@ typedef struct {
  */
 
 enum syntno_type { NO_ADD=0, NO_SUB, NO_MULT, NO_DIV, NO_PAR, NO_STMTS, NO_STMT, NO_UNA,
-  NO_ATTR, NO_TOK, NO_PRNT};
+  NO_ATTR, NO_TOK, NO_PRNT, NO_WHILE, NO_LT, NO_GT, NO_LE, NO_GE, NO_EQ, NO_NE, 
+  NO_OR, NO_AND, NO_IF, NO_OUT, NO_IN, NO_DELAY};
 
 struct syntno {
 	short id;
@@ -44,7 +47,7 @@ typedef struct {
 	void *llvm;
 } symbol;
 
-symbol synames[100];
+extern symbol synames[100];
 void add_symbol(const char *varname, int line, int col);
 int  search_symbol(const char *varname);
 void print_symbols();
@@ -64,7 +67,11 @@ void declared_vars(syntno **root, syntno *no);
 // gera nos de LLVM IR
 void setup_llvm_global();
 void print_llvm_ir();
-void generate_llvm_node(syntno **root, syntno *no);
+void main_generate_llvm_nodes(syntno *no);
+
+#ifdef ENABLE_ARDUINO
+void declare_auxiliary_arduino_funcs();	
+#endif
 
 #endif
 

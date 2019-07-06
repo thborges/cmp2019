@@ -26,11 +26,14 @@ targs *copy_targs(const targs a);
 
 %define parse.error verbose
 
-%token PRINT 
+%token PRINT WHILE AND OR IF ELSE
+%token IN OUT DELAY
 %token <args> INT DBL
 %token <args> VAR
 
-%type <no> stmts stmt arit term factor unary print
+%type <no> stmts stmt arit term factor unary print 
+%type <no> while logical lterm lfactor if
+%type <no> out delay fcall
 
 %start program
 
@@ -42,26 +45,26 @@ program : stmts	{ //print_symbols();
 
 				  // gera codigo
 				  setup_llvm_global();
-				  visitor_leaf_first(&($1), generate_llvm_node);
+				  main_generate_llvm_nodes($1);
 				  print_llvm_ir();
 
 				  //print_tree($1);
 				}
 		;
 
-stmts	: stmt ';' stmts	{ syntno *u = create_no('S', NO_STMTS, 2);
+stmts	: stmt stmts		{ syntno *u = create_no('S', NO_STMTS, 2);
 							  u->children[0] = $1;
-							  u->children[1] = $3;
+							  u->children[1] = $2;
 							  $$ = u;
 							}
-		| stmt ';'			{ syntno *u = create_no('s', NO_STMT, 1);
+		| stmt				{ syntno *u = create_no('s', NO_STMT, 1);
 							  u->children[0] = $1;
 							  $$ = u;
 							}
 		;
 
 
-stmt	: VAR '=' arit		{ add_symbol($1.varname, $1.line, $1.col); 
+stmt	: VAR '=' arit ';'	{ add_symbol($1.varname, $1.line, $1.col); 
 							  syntno *u = create_no('A', NO_ATTR, 2);
 
 							  syntno *uvar = create_no('V', NO_TOK, 0);
@@ -71,9 +74,54 @@ stmt	: VAR '=' arit		{ add_symbol($1.varname, $1.line, $1.col);
 							  u->children[1] = $3;
 							  $$ = u;
 							} 
-		| print				{ $$ = $1; }
-		| error				{ }
+		| print ';'			{ $$ = $1; }
+		| while				{ $$ = $1; }
+		| if				{ $$ = $1; }
+		| out ';'			{ $$ = $1; }
+		| delay ';'			{ $$ = $1; }
+		| error ';'			{ }
 		;
+
+out : OUT INT '=' factor	{ syntno *intconst = create_no('I', NO_TOK, 0);
+							  intconst->token_args = copy_targs($2);
+							  
+							  syntno *u = create_no('O', NO_OUT, 2);
+							  u->children[0] = intconst;
+							  u->children[1] = $4;
+							  $$ = u;
+							}
+
+	| OUT VAR '=' arit		{ syntno *var = create_no('V', NO_TOK, 0);
+							  var->token_args = copy_targs($2);
+
+							  syntno *u = create_no('O', NO_OUT, 2);
+							  u->children[0] = var;
+							  u->children[1] = $4;
+							  $$ = u;
+							}
+	;
+
+delay : DELAY arit			{ syntno *u = create_no('D', NO_DELAY, 1);
+							  u->children[0] = $2;
+							  $$ = u;
+							}
+	  ;
+
+if : IF '(' logical ')' '{' stmts '}'
+				{ syntno *u = create_no('I', NO_IF, 2);
+				  u->children[0] = $3;
+				  u->children[1] = $6;
+				  $$ = u;
+				}
+
+   | IF '(' logical ')' '{' stmts '}' ELSE '{' stmts '}'
+				{ syntno *u = create_no('I', NO_IF, 3);
+				  u->children[0] = $3;
+				  u->children[1] = $6;
+				  u->children[2] = $10;
+				  $$ = u;
+				}
+   ;
 
 print	: PRINT VAR			{ syntno *u = create_no('P', NO_PRNT, 0);
 							  u->token_args = copy_targs($2);
@@ -81,6 +129,62 @@ print	: PRINT VAR			{ syntno *u = create_no('P', NO_PRNT, 0);
 							}
 		;
 
+while	: WHILE '(' logical ')' '{' stmts '}'
+							{ syntno *u = create_no('W', NO_WHILE, 2);
+							  u->children[0] = $3;
+							  u->children[1] = $6;
+							  $$ = u;
+							}
+		;
+
+logical : logical OR lterm	{ syntno *u = create_no('l', NO_OR, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| lterm				{ $$ = $1; }
+		;
+
+lterm	: lterm AND lfactor	{ syntno *u = create_no('l', NO_AND, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							} 
+		| lfactor			{ $$ = $1; }
+		;
+
+lfactor : '(' logical ')'	{ $$ = $2; }
+		| arit '>' arit		{ syntno *u = create_no('l', NO_GT, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| arit '<' arit		{ syntno *u = create_no('l', NO_LT, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $3;
+							  $$ = u;
+							}
+		| arit '=''=' arit	{ syntno *u = create_no('l', NO_EQ, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $4;
+							  $$ = u;
+							}
+		| arit '>''=' arit	{ syntno *u = create_no('l', NO_GE, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $4;
+							  $$ = u;
+							}
+		| arit '<''=' arit	{ syntno *u = create_no('l', NO_LE, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $4;
+							  $$ = u;
+							}
+		| arit '!''=' arit	{ syntno *u = create_no('l', NO_NE, 2);
+							  u->children[0] = $1;
+							  u->children[1] = $4;
+							  $$ = u;
+							}
+		;
 
 arit	: arit '+' term		{ syntno *u = create_no('+', NO_ADD, 2);
 							  u->children[0] = $1;
@@ -126,7 +230,14 @@ factor	: '(' arit ')'		{ /*syntno *u = create_no('p', NO_PAR, 1);
 							  $$ = u;
 							}
 	| unary					{ $$ = $1; }
+	| fcall					{ $$ = $1; }
 	;
+
+fcall   : IN factor			{ syntno *u = create_no('N', NO_TOK, 1);
+							  u->children[0] = $2;
+							  $$ = u;
+							}
+		;
 
 unary	: '-' factor		{ syntno *u = create_no('U', NO_UNA, 1);
 							  u->children[0] = $2;

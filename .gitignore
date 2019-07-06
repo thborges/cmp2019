@@ -1,0 +1,11 @@
+*.tab.*
+lex.yy.c
+node.h
+*.zip
+.*.swp
+.*.swo
+*.o
+*.s
+*.a
+.DS_Store
+*.dSYM

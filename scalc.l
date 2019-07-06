@@ -17,29 +17,40 @@ extern int col;
 [\n]		{ col = 0; }
 "//".*		{   }
 
-";"		{ return ';'; }
-"+"		{ return '+'; }
-"-"		{ return '-'; }
-"*"		{ return '*'; }
-"/"		{ return '/'; }
-"="		{ return '='; }
+";"			{ return ';'; }
+"+"			{ return '+'; }
+"-"			{ return '-'; }
+"*"			{ return '*'; }
+"/"			{ return '/'; }
+"="			{ return '='; }
+[<>!{}]		{ return yytext[0]; }
 "PRINT"		{ return PRINT; }
-"("		{ return '('; }
-")"		{ return ')'; }
+"WHILE"		{ return WHILE; }
+"AND"		{ return AND; }
+"OR"		{ return OR; }
+"IF"		{ return IF; }
+"ELSE"		{ return ELSE; }
+"("			{ return '('; }
+")"			{ return ')'; }
+
+ /* arduino */
+"IN"		{ return IN; }
+"OUT"		{ return OUT; }
+"DELAY"		{ return DELAY; }
 
 [0-9]+		{ yylval.args.constvalue = atoi(yytext); 
-		  return INT; }
+			  return INT; }
 
 [0-9]+\.[0-9]+	{ yylval.args.constvalue = atof(yytext);
-		  return DBL; 
-		}
+				  return DBL; 
+				}
 
 
 [A-Z]+		{ yylval.args.varname = strndup(yytext, yyleng);
-		  yylval.args.line = yylineno;
-		  yylval.args.col = col - yyleng;
-		  return VAR; 
-		}
+			  yylval.args.line = yylineno;
+			  yylval.args.col = col - yyleng;
+			  return VAR; 
+			}
 
 .		{ printf("Nao era esperado %s\n", yytext);
 		  exit(1);
