@@ -1,5 +1,5 @@
 LLVMFLAGS=$(shell llvm-config --cxxflags)
-LLVMLIBS=$(shell llvm-config --ldflags --libs engine) -lncurses
+LLVMLIBS=$(shell llvm-config --ldflags --libs) -lncurses -lz
 
 ARDUINOFLAGS=-fdata-sections -ffunction-sections -Wl,--gc-sections
 ARDUINO=atmega328p
@@ -8,8 +8,8 @@ all:
 	flex --yylineno scalc.l
 	bison -d scalc.y
 	g++ -ggdb -O0 -c -std=c++11 backarduino.cpp backllvm.cpp ${LLVMFLAGS}
-	gcc -c lex.yy.c scalc.tab.c semantic.c 
-	g++ lex.yy.o scalc.tab.o semantic.o backllvm.o backarduino.o ${LLVMLIBS} -o scalc
+	gcc -ggdb -O0 -c lex.yy.c scalc.tab.c semantic.c 
+	g++ -ggdb -O0 lex.yy.o scalc.tab.o semantic.o backllvm.o backarduino.o ${LLVMLIBS} -o scalc
 
 test:
 	./scalc teste02.txt
@@ -17,7 +17,7 @@ test:
 stdc.o : stdc.c
 	gcc -c stdc.c
 
-%.ll : %.txt
+%.ll : %.txt scalc
 	./scalc $< > $@
 
 %.s : %.ll
@@ -29,8 +29,11 @@ stdc.o : stdc.c
 % : %.s stdc.o
 	gcc -o $@ $< stdc.o
 
-%.avr.o : %.avr.s arduinowire/core.a
-	avr-gcc -Os ${ARDUINOFLAGS} -mmcu=${ARDUINO} $< arduinowire/core.a -o $@
+stdc_avr.o : stdc_avr.cpp
+	avr-g++ -Os ${ARDUINOFLAGS} -mmcu=${ARDUINO} -Iarduinowire -c $< -o $@
+
+%.avr.o : %.avr.s arduinowire/core.a stdc_avr.o
+	avr-g++ -Os ${ARDUINOFLAGS} -mmcu=${ARDUINO} $< stdc_avr.o arduinowire/core.a -o $@
 
 %.hex : %.avr.o
 	avr-objcopy -O ihex $< $@
@@ -39,7 +42,7 @@ stdc.o : stdc.c
 	avrdude -C ~/avrdude.conf -P /dev/tty.usbserial -V -carduino -p${ARDUINO} -b57600 -U flash:w:$<:i
 
 zip:
-	zip calc.zip backllvm.cpp backarduino.cpp stdc.c semantic.c scalc.l scalc.y *.txt header.h Makefile 
+	zip calc.zip arduinowire/*.{cpp,c,h} *.{txt,h,l,y,cpp} Makefile 
 
 clean:
 	rm -f *.o *.s *.hex *.ll

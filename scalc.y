@@ -12,6 +12,8 @@ int yyerror(const char *s);
 int yylex (void);
 
 int sycount = 0;
+int error_count = 0;
+char *filename;
 
 syntno *create_no(const char name, enum syntno_type t, short children); 
 void print_tree(syntno *root);
@@ -26,29 +28,32 @@ targs *copy_targs(const targs a);
 
 %define parse.error verbose
 
-%token PRINT WHILE AND OR IF ELSE
+%token PRINT WHILE AND OR IF ELSE FUNCTION
 %token IN OUT DELAY
 %token <args> INT DBL
 %token <args> VAR
 
 %type <no> stmts stmt arit term factor unary print 
 %type <no> while logical lterm lfactor if
-%type <no> out delay fcall
+%type <no> out delay fcall functiondef functioncall
 
 %start program
 
 %%
 
 program : stmts	{ //print_symbols();
+				  //print_tree($1);
+
 				  visitor_leaf_first(&($1), collapse_stmts);
 				  visitor_leaf_first(&($1), declared_vars);
+
+				  if (error_count > 0)
+				  	exit(error_count);
 
 				  // gera codigo
 				  setup_llvm_global();
 				  main_generate_llvm_nodes($1);
 				  print_llvm_ir();
-
-				  //print_tree($1);
 				}
 		;
 
@@ -79,8 +84,26 @@ stmt	: VAR '=' arit ';'	{ add_symbol($1.varname, $1.line, $1.col);
 		| if				{ $$ = $1; }
 		| out ';'			{ $$ = $1; }
 		| delay ';'			{ $$ = $1; }
+		| functiondef		{ $$ = $1; }
+		| functioncall ';'	{ $$ = $1; }
 		| error ';'			{ }
 		;
+
+
+functiondef : FUNCTION VAR '(' ')' '{' stmts '}'
+				{ add_symbol($2.varname, $2.line, $2.col);
+				  syntno *u = create_no('F', NO_FUNC, 1);
+				  u->token_args = copy_targs($2);
+				  u->children[0] = $6;
+				  $$ = u;
+				}
+			;
+
+functioncall : VAR '(' ')'	{ syntno *u = create_no('C', NO_CALL, 0);
+							  u->token_args = copy_targs($1);
+							  $$ = u;
+							}
+			 ;
 
 out : OUT INT '=' factor	{ syntno *intconst = create_no('I', NO_TOK, 0);
 							  intconst->token_args = copy_targs($2);
@@ -111,6 +134,14 @@ if : IF '(' logical ')' '{' stmts '}'
 				{ syntno *u = create_no('I', NO_IF, 2);
 				  u->children[0] = $3;
 				  u->children[1] = $6;
+				  $$ = u;
+				}
+
+   | IF '(' logical ')' '{' stmts '}' ELSE if
+				{ syntno *u = create_no('I', NO_IF, 3);
+				  u->children[0] = $3;
+				  u->children[1] = $6;
+				  u->children[2] = $9;
 				  $$ = u;
 				}
 
@@ -237,6 +268,10 @@ fcall   : IN factor			{ syntno *u = create_no('N', NO_TOK, 1);
 							  u->children[0] = $2;
 							  $$ = u;
 							}
+		| VAR '(' ')'		{ syntno *u = create_no('C', NO_TOK, 0);
+							  u->token_args = copy_targs($1);
+							  $$ = u;
+							}
 		;
 
 unary	: '-' factor		{ syntno *u = create_no('U', NO_UNA, 1);
@@ -248,7 +283,7 @@ unary	: '-' factor		{ syntno *u = create_no('U', NO_UNA, 1);
 %%
 
 int yyerror(const char *s) {
-	printf("teste02.txt:%d:%d %s.\n", yylineno, col, s);
+	printf("%s:%d:%d %s.\n", filename, yylineno, col, s);
 	return 1;
 }
 
@@ -256,10 +291,11 @@ int yywrap() {
 	return 1;
 }
 
+
 int main(int argc, char *argv[]) {
 
 	if (argc > 1) {
-//		filename = argv[1];
+		filename = argv[1];
 		yyin = fopen(argv[1], "r");
 	}
 
@@ -276,7 +312,7 @@ int main(int argc, char *argv[]) {
 void add_symbol(const char *varname, int line, int col) {
 	int e = search_symbol(varname);
 	if (e == -1) {
-		strncpy(synames[sycount].name, varname, 10);
+		strncpy(synames[sycount].name, varname, 100);
 		synames[sycount].line = line;
 		synames[sycount].col = col;
 		synames[sycount].exists = false; // usado na analise semantica
@@ -317,41 +353,31 @@ syntno *create_no(const char name, enum syntno_type t, short childcount) {
 
 void print_tree_recursiv(syntno *root) {
 
-	// NO_ADD=0, NO_SUB, NO_MULT, NO_DIV, NO_PAR, 
- 	// NO_STMTS, NO_STMT, NO_UNA, NO_ATTR, NO_TOK, NO_PRNT
-	const char *node_names[] = {
-		"NO_ADD", "NO_SUB", "NO_MULT", "NO_DIV", "NO_PAR", 
- 		"NO_STMTS", "NO_STMT", "NO_UNA", "NO_ATTR", "NO_TOK", "NO_PRNT"};
+	if (root->type == NO_TOK || root->type == NO_PRNT) {
+		targs *args = root->token_args;
+		switch (root->token) {
+			case 'V':
+				printf("\tN%d[label=\"%s\"];\n", root->id, args->varname);
+				break;
+			case 'D':
+				printf("\tN%d[label=\"%lf\"];\n", root->id, args->constvalue);
+				break;
+			case 'I':
+				printf("\tN%d[label=\"%d\"];\n", root->id, (int)args->constvalue);
+				break;
+			case 'P':
+				printf("\tN%d[label=\"PRINT %s\"];\n", root->id, args->varname);
+				break;
 
-//	if (root->type == NO_TOK || root->type == NO_PRNT || root->type == NO_ATTR) {
-//	}
-//	else {
-		if (root->type == NO_TOK || root->type == NO_PRNT) {
-			targs *args = root->token_args;
-			switch (root->token) {
-				case 'V':
-					printf("\tN%d[label=\"%s\"];\n", root->id, args->varname);
-					break;
-				case 'D':
-					printf("\tN%d[label=\"%lf\"];\n", root->id, args->constvalue);
-					break;
-				case 'I':
-					printf("\tN%d[label=\"%d\"];\n", root->id, (int)args->constvalue);
-					break;
-				case 'P':
-					printf("\tN%d[label=\"PRINT %s\"];\n", root->id, args->varname);
-					break;
-
-			}
-		} else {
-			printf("\tN%d[label=\"%s\"];\n", root->id, node_names[root->type]);
 		}
+	} else {
+		printf("\tN%d[label=\"%s\"];\n", root->id, node_names[root->type]);
+	}
 
-		for(int i = 0; i < root->childcount; i++) {
-			print_tree_recursiv(root->children[i]);
-			printf("\tN%d -- N%d;\n", root->id, root->children[i]->id);
-		}
-//	}
+	for(int i = 0; i < root->childcount; i++) {
+		print_tree_recursiv(root->children[i]);
+		printf("\tN%d -- N%d;\n", root->id, root->children[i]->id);
+	}
 }
 
 void print_tree(syntno *root) {

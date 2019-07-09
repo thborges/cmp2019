@@ -9,6 +9,14 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/InlineAsm.h>
 
+#include <llvm/Passes/PassBuilder.h>
+#include "llvm/IR/LegacyPassManager.h"
+
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
+
 extern "C" {
 	#include "header.h"
 }
@@ -21,6 +29,7 @@ static IRBuilder<> builder(ctx);
 Module *module;
 BasicBlock *main_stmts;
 Function *main_func;
+Function *current_func;
 
 // auxiliary functions of stdc.c
 Function *printfloat = NULL;
@@ -63,9 +72,62 @@ void create_printdoisints() {
 }
 
 void print_llvm_ir() {
-	// main func return always 0
+	// main func always returns 0
 	Value *retv = ConstantInt::get(ctx, APInt(16, 0));
 	builder.CreateRet(retv);
+
+	InitializeAllTargetInfos();
+	InitializeAllTargets();
+	InitializeAllTargetMCs();
+	InitializeAllAsmParsers();
+	InitializeAllAsmPrinters();
+
+	auto TargetTriple = "avr-atmel-none";
+	std::string Error;
+	auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
+	auto CPU = "atmega328p";
+	auto Features = "+avr5";
+
+	TargetOptions opt;
+	auto RM = Optional<Reloc::Model>();
+	auto targetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
+
+	module->setDataLayout(targetMachine->createDataLayout());
+	module->setTargetTriple(TargetTriple);
+
+	llvm::PassBuilder passBuilder(targetMachine);
+	llvm::LoopAnalysisManager loopAnalysisManager(false); // true is just to output debug info
+	llvm::FunctionAnalysisManager functionAnalysisManager(false);
+	llvm::CGSCCAnalysisManager cGSCCAnalysisManager(false);
+	llvm::ModuleAnalysisManager moduleAnalysisManager(false);
+
+	passBuilder.registerModuleAnalyses(moduleAnalysisManager);
+	passBuilder.registerCGSCCAnalyses(cGSCCAnalysisManager);
+	passBuilder.registerFunctionAnalyses(functionAnalysisManager);
+	passBuilder.registerLoopAnalyses(loopAnalysisManager);
+	passBuilder.crossRegisterProxies(
+	    loopAnalysisManager, functionAnalysisManager, cGSCCAnalysisManager, moduleAnalysisManager);
+
+	llvm::ModulePassManager modulePassManager =
+    	passBuilder.buildPerModuleDefaultPipeline(llvm::PassBuilder::OptimizationLevel::Oz);
+	modulePassManager.run(*module, moduleAnalysisManager);
+
+	//#define ENABLE_STDOUT
+	#ifdef ENABLE_STDOUT
+	std::string outfilename = filename;
+	outfilename += ".o";
+	std::error_code ec;
+	raw_fd_ostream dest(outfilename, ec);
+	if (ec) {
+		printf("Error writing to %s.\n", outfilename.c_str());
+		exit(1);
+	}
+	legacy::PassManager pass_codegen;
+	targetMachine->addPassesToEmitFile(pass_codegen, dest, nullptr, TargetMachine::CGFT_ObjectFile);
+	pass_codegen.run(*module);
+	dest.flush();
+	#endif
+
 
 	// print IR to stdout
 	module->print(outs(), nullptr);
@@ -79,6 +141,7 @@ void setup_llvm_global() {
 	main_func = Function::Create(ft, GlobalValue::ExternalLinkage, "main", module);
 
 	main_stmts = BasicBlock::Create(ctx, "entry", main_func);
+	current_func = main_func;
 
 	builder.SetInsertPoint(main_stmts);
 
@@ -93,19 +156,26 @@ void setup_llvm_global() {
 	#endif
 }
 
-Value *default_coersion(Value *v, Type *destty) {
+Value *default_coersion(Value *v, Type *destty, bool unsig = false) {
 	Type *ty = v->getType();
 	if (ty != destty) {
 		// float to integer
-		if ((ty->isFloatTy() || ty->isDoubleTy()) && destty->isIntegerTy())
-			return builder.CreateFPToSI(v, destty);
+		if ((ty->isFloatTy() || ty->isDoubleTy()) && destty->isIntegerTy()) {
+			if (unsig)
+				return builder.CreateFPToUI(v, destty);
+			else
+				return builder.CreateFPToSI(v, destty);
+		}
 
 		// integer to float
-		else if ((destty->isFloatTy() || destty->isDoubleTy()) && ty->isIntegerTy())
-			return builder.CreateSIToFP(v, destty);
+	else if ((destty->isFloatTy() || destty->isDoubleTy()) && ty->isIntegerTy()) {
+			if (unsig)
+				return builder.CreateSIToFP(v, destty);
+			else
+				return builder.CreateUIToFP(v, destty);
 
 		// generic ext Int to Int
-		else if (destty->isIntegerTy() && ty->isIntegerTy())
+		} else if (destty->isIntegerTy() && ty->isIntegerTy())
 			return builder.CreateSExtOrTrunc(v, destty);
 
 		// generic trunc
@@ -120,6 +190,9 @@ Value *gen_llvm_subtree(syntno *no) {
 	targs *args = no->token_args;
 	std::vector<Value *> fargs;
 	Value *auxv;
+	FunctionType *externft;
+	Function *externf;
+
 	if (no->type == NO_TOK) {
 		switch (no->token) {
 			case 'I': return ConstantInt::get(ctx, APInt(16, args->constvalue));
@@ -135,6 +208,13 @@ Value *gen_llvm_subtree(syntno *no) {
 				auxv = default_coersion(auxv, Type::getInt8Ty(ctx));
 				fargs.push_back(auxv);
 				return builder.CreateCall(analogRead, fargs); 
+			case 'C':
+				// default: call a function without parameters that return float 
+				// it should exists in the link stage
+				externft = FunctionType::get(Type::getFloatTy(ctx), ArrayRef<Type*>(), false);
+				externf = Function::Create(externft, GlobalValue::ExternalLinkage, 
+					no->token_args->varname, module);
+				return builder.CreateCall(externf);
 		}
 	}
 	else {
@@ -162,7 +242,7 @@ Value *gen_llvm_subtree(syntno *no) {
 			case NO_UNA:
 				return builder.CreateFMul(
 					gen_llvm_subtree(no->children[0]),
-					ConstantFP::get(ctx, APFloat(-1.0)));
+					ConstantFP::get(ctx, APFloat((float)-1.0)));
 
 			case NO_EQ:
 				return builder.CreateFCmpOEQ(
@@ -196,7 +276,7 @@ Value *gen_llvm_subtree(syntno *no) {
 
 			default:
 				printf("Tipo de no nao implementado %d %c.\n", no->type, no->token);
-				//exit(1);
+				assert(0 && "Tipo de no nao implementado");
 		}
 	}
 	return NULL;
@@ -217,11 +297,19 @@ Value *generate_llvm_nodes(syntno *no) {
 
 	} else if (no->type == NO_ATTR) {
 		Value *var;
-		int i = search_symbol(no->children[0]->token_args->varname);
+		char *varname = no->children[0]->token_args->varname;
+		int i = search_symbol(varname);
 		if (i != -1 && synames[i].llvm)
 			var = (Value*)synames[i].llvm;
 		else {
-			var = builder.CreateAlloca(Type::getFloatTy(ctx), 0, nullptr); // TODO:
+			if (current_func == main_func) { // declare var as global
+				GlobalVariable *gv = new GlobalVariable(*module, Type::getFloatTy(ctx), 
+					false, GlobalValue::CommonLinkage, NULL, varname);
+				gv->setInitializer(ConstantFP::get(ctx, APFloat((float)0.0)));
+				var = gv;
+			} else {
+				var = builder.CreateAlloca(Type::getFloatTy(ctx), 0, nullptr, varname); // TODO:
+			}
 			synames[i].llvm = var;
 		}
 		Value *rvalue = gen_llvm_subtree(no->children[1]);
@@ -240,18 +328,18 @@ Value *generate_llvm_nodes(syntno *no) {
 	} else if (no->type == NO_WHILE) {
 
 		// a new block for while condition
-		BasicBlock *condwhile = BasicBlock::Create(ctx, "while_cond", main_func);
+		BasicBlock *condwhile = BasicBlock::Create(ctx, "while_cond", current_func);
 		builder.CreateBr(condwhile);
 		builder.SetInsertPoint(condwhile);
 		Value *expr = gen_llvm_subtree(no->children[0]);
 
 		// a new block for while body
-		BasicBlock *bodywhile = BasicBlock::Create(ctx, "while_body", main_func);
+		BasicBlock *bodywhile = BasicBlock::Create(ctx, "while_body", current_func);
 		builder.SetInsertPoint(bodywhile);
 		Value *sub_body = generate_llvm_nodes(no->children[1]);
 
 		// a new block for while end (where the program continues after exiting while)
-		BasicBlock *endwhile = BasicBlock::Create(ctx, "while_end", main_func);
+		BasicBlock *endwhile = BasicBlock::Create(ctx, "while_end", current_func);
 	
 		// after test condition, go to bodywhile or endwhile
 		builder.SetInsertPoint(condwhile);
@@ -271,37 +359,74 @@ Value *generate_llvm_nodes(syntno *no) {
 		Value *expr = gen_llvm_subtree(no->children[0]);
 
 		// a new block for then
-		BasicBlock *then = BasicBlock::Create(ctx, "ifthen", main_func);
-		BasicBlock *endif = BasicBlock::Create(ctx, "endif", main_func);
+		BasicBlock *then = BasicBlock::Create(ctx, "ifthen", current_func);
+		BasicBlock *endif;
 
 		if (no->childcount == 2) { // only if then, no else
+			endif = BasicBlock::Create(ctx, "endif", current_func);
 			builder.CreateCondBr(expr, then, endif);
 			builder.SetInsertPoint(then);
 			Value *retthen = generate_llvm_nodes(no->children[1]);
 			builder.CreateBr(endif);
 		} else {
-			BasicBlock *elseif = BasicBlock::Create(ctx, "else", main_func);
+			BasicBlock *elseif = BasicBlock::Create(ctx, "else", current_func);
+			endif = BasicBlock::Create(ctx, "endif", current_func);
 			builder.CreateCondBr(expr, then, elseif);
 			
 			builder.SetInsertPoint(then);
 			Value *retthen = generate_llvm_nodes(no->children[1]);
+			if (retthen && retthen->getValueID() == Value::BasicBlockVal)
+				builder.SetInsertPoint((BasicBlock*)retthen);
 			builder.CreateBr(endif);
 			
 			builder.SetInsertPoint(elseif);
 			Value *retelse = generate_llvm_nodes(no->children[2]);
+			if (retelse && retelse->getValueID() == Value::BasicBlockVal)
+				builder.SetInsertPoint((BasicBlock*)retelse);
 			builder.CreateBr(endif);
 		}
 
+		builder.SetInsertPoint(endif);
 		return endif;
+	}
+
+	else if (no->type == NO_FUNC) {
+		BasicBlock *oldblock = builder.GetInsertBlock();
+
+		FunctionType *ft = FunctionType::get(Type::getVoidTy(ctx), ArrayRef<Type*>(), false);
+		Function *new_func = Function::Create(ft, GlobalValue::ExternalLinkage, no->token_args->varname, module);
+
+		int i = search_symbol(no->token_args->varname);
+		assert(i != -1 && "symbol should exists");
+		synames[i].llvm = new_func;
+
+		BasicBlock *newf_stmts = BasicBlock::Create(ctx, "entry", new_func);
+		builder.SetInsertPoint(newf_stmts);
+
+		current_func = new_func;
+		generate_llvm_nodes(no->children[0]);
+		builder.CreateRet(NULL);
+
+		// continue inserting statements on previous set block
+		current_func = main_func;
+		builder.SetInsertPoint(oldblock);
+	}
+
+	else if (no->type == NO_CALL) {
+
+		int i = search_symbol(no->token_args->varname);
+		assert(i != -1 && "symbol should exists");
+		builder.CreateCall((Function*)synames[i].llvm);
 	}
 
 #ifdef ENABLE_ARDUINO
 	else if (no->type == NO_OUT) { // porta saída, chama analogWrite
 		Value *port = gen_llvm_subtree(no->children[0]);
-		port = default_coersion(port, Type::getInt8Ty(ctx));
+		port = default_coersion(port, Type::getInt8Ty(ctx), true);
 
 		Value *output = gen_llvm_subtree(no->children[1]);
-		output = default_coersion(output, Type::getInt16Ty(ctx));
+		//output = default_coersion(output, Type::getInt16Ty(ctx));
+		output = default_coersion(output, Type::getInt8Ty(ctx), true);
 
 		std::vector<Value *> args;
 		args.push_back(port);
@@ -310,7 +435,7 @@ Value *generate_llvm_nodes(syntno *no) {
 	}
 	else if (no->type == NO_DELAY) { // delay miliseconds
 		Value *vdelay = gen_llvm_subtree(no->children[0]);
-		vdelay = default_coersion(vdelay, Type::getInt32Ty(ctx));
+		vdelay = default_coersion(vdelay, Type::getInt32Ty(ctx), true);
 
 		std::vector<Value *> args;
 		args.push_back(vdelay);

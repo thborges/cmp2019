@@ -19,7 +19,12 @@ typedef struct {
 
 enum syntno_type { NO_ADD=0, NO_SUB, NO_MULT, NO_DIV, NO_PAR, NO_STMTS, NO_STMT, NO_UNA,
   NO_ATTR, NO_TOK, NO_PRNT, NO_WHILE, NO_LT, NO_GT, NO_LE, NO_GE, NO_EQ, NO_NE, 
-  NO_OR, NO_AND, NO_IF, NO_OUT, NO_IN, NO_DELAY};
+  NO_OR, NO_AND, NO_IF, NO_OUT, NO_IN, NO_DELAY, NO_FUNC, NO_CALL};
+
+static const char *node_names[] = {
+	"NO_ADD", "NO_SUB", "NO_MULT", "NO_DIV", "NO_PAR", "NO_STMTS", "NO_STMT", "NO_UNA", 
+	"NO_ATTR", "NO_TOK", "NO_PRNT", "NO_WHILE", "<", ">", "<=", ">=", "==", "!=", 
+    "OR", "AND", "IF", "OUT", "IN", "DELAY", "FUNC", "CALL"};
 
 struct syntno {
 	short id;
@@ -40,14 +45,16 @@ typedef struct syntno syntno;
  * busca binaria.
  */
 typedef struct {
-	char name[11];
+	char name[101];
 	int line;
 	int col;
 	int exists;
 	void *llvm;
 } symbol;
 
+extern int error_count;
 extern symbol synames[100];
+extern char *filename;
 void add_symbol(const char *varname, int line, int col);
 int  search_symbol(const char *varname);
 void print_symbols();

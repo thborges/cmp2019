@@ -24,6 +24,7 @@ extern int col;
 "/"			{ return '/'; }
 "="			{ return '='; }
 [<>!{}]		{ return yytext[0]; }
+"FUNCTION"  { return FUNCTION; }
 "PRINT"		{ return PRINT; }
 "WHILE"		{ return WHILE; }
 "AND"		{ return AND; }
@@ -46,11 +47,11 @@ extern int col;
 				}
 
 
-[A-Z]+		{ yylval.args.varname = strndup(yytext, yyleng);
-			  yylval.args.line = yylineno;
-			  yylval.args.col = col - yyleng;
-			  return VAR; 
-			}
+[A-Z][A-Z_0-9]*		{ yylval.args.varname = strndup(yytext, yyleng);
+					  yylval.args.line = yylineno;
+					  yylval.args.col = col - yyleng;
+					  return VAR; 
+					}
 
 .		{ printf("Nao era esperado %s\n", yytext);
 		  exit(1);

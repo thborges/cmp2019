@@ -401,7 +401,7 @@ void init()
 	UCSR0B = 0;
 #endif
 
-    int i = 2;
+/*  int i = 2;
     for(; i <= 13; i++)
         pinMode(i, OUTPUT);
 	pinMode(A0, INPUT);
@@ -412,5 +412,5 @@ void init()
 	pinMode(A5, INPUT);
 	pinMode(A6, INPUT);
 	pinMode(A7, INPUT);
-
+*/
 }

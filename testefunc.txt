@@ -1,0 +1,7 @@
+FUNCTION C() {
+	A = 10.0;
+	PRINT A;
+}
+
+B = 0.0;
+PRINT B;

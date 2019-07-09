@@ -7,7 +7,7 @@ export PATH := /Applications/Arduino.app/Contents/Java/hardware/tools/avr/bin:$(
 ARDUINO=atmega328p
 #ARDUINO=atmega32u4
 
-FLAGS=-Os -ffunction-sections -DF_CPU=16000000L -DARDUINO=10805 -DARDUINO_AVR_PRO -DARDUINO_ARCH_AVR
+FLAGS=-Os -fdata-sections -ffunction-sections -Wl,--gc-sections -DF_CPU=16000000L -DARDUINO=10805 -DARDUINO_AVR_PRO -DARDUINO_ARCH_AVR
 
 all: core.a
 
@@ -23,7 +23,7 @@ core.a : $(CS) $(CPPS) $(SS)
 	avr-gcc -c ${FLAGS} -mmcu=$(ARDUINO) $<
 
 %.o : %.cpp
-	avr-g++ -c ${FLAGS} -mmcu=$(ARDUINO) $<
+	avr-g++ -c ${FLAGS} -fno-threadsafe-statics -mmcu=$(ARDUINO) $<
 
 #clang -c --target=avr -mmcu=$(ARDUINO) -DF_CPU=16000000L -I/usr/avr/include $< -o $@
 #clang -Iavr/include -c --target=avr -mmcu=$(ARDUINO) -DF_CPU=16000000L -I. $< -o $@

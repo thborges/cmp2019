@@ -41,19 +41,18 @@ void declare_auxiliary_arduino_funcs() {
 	analogRead->setCallingConv(CallingConv::C);
 
 	// analogWrite or digitalWrite
-	arg_types.clear();
+	/*arg_types.clear();
 	arg_types.push_back(Type::getInt8Ty(ctx));
 	arg_types.push_back(Type::getInt16Ty(ctx));
 	ftype = FunctionType::get(Type::getVoidTy(ctx), arg_types, false);
-	analogWrite = Function::Create(ftype, Function::ExternalLinkage, "analogWrite", module);
+	analogWrite = Function::Create(ftype, Function::ExternalLinkage, "analogWrite", module);*/
 
 	// digitalWrite instead
-	/*arg_types.clear();
+	arg_types.clear();
 	arg_types.push_back(Type::getInt8Ty(ctx));
 	arg_types.push_back(Type::getInt8Ty(ctx));
 	ftype = FunctionType::get(Type::getVoidTy(ctx), arg_types, false);
 	analogWrite = Function::Create(ftype, Function::ExternalLinkage, "digitalWrite", module);
-	*/
 
 	analogWrite->setCallingConv(CallingConv::C);
 

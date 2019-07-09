@@ -41,15 +41,6 @@ void declared_vars(syntno **root, syntno *no) {
 	// NO_TOK e 'V', verifica a existencia na tabela de símbolos
 	syntno *nr = *root;
 
-	if (nr->type != NO_ATTR && no->type == NO_TOK && no->token == 'V') {
-		targs *args = no->token_args;
-		int s = search_symbol(args->varname);
-		if (s == -1 || !synames[s].exists) {
-			printf(":%d:%d: identifier %s undeclared.\n", 
-				args->line, args->col, args->varname);
-		}
-	}
-
 	// se o nó é NO_ATTR, marca a variável como declarada
 	if (no->type == NO_ATTR) {
 		targs *args = no->children[0]->token_args;
@@ -57,5 +48,25 @@ void declared_vars(syntno **root, syntno *no) {
 		if (s != -1)
 			synames[s].exists = true;
 	}
+
+	else if (nr->type != NO_ATTR) {
+		targs *args = NULL;
+		if (no->type == NO_TOK && no->token == 'V')
+			args = no->token_args;
+		else if (no->type == NO_PRNT)
+			args = no->token_args;
+		
+		if (!args)
+			return;
+
+		int s = search_symbol(args->varname);
+		if (s == -1 || !synames[s].exists) {
+			printf("%s:%d:%d: error: identifier %s undeclared.\n", 
+				filename, args->line, args->col, args->varname);
+			error_count++;
+		}
+	}
+
+
 }
 
