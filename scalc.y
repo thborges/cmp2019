@@ -317,12 +317,8 @@ void add_symbol(const char *varname, int line, int col) {
 		strncpy(synames[sycount].name, varname, 100);
 		synames[sycount].line = line;
 		synames[sycount].col = col;
-<<<<<<< fde3dc1ed33f6885b7853a928a3c7ec86171425f
 		synames[sycount].exists = false; // usado na analise semantica
 		synames[sycount].llvm = NULL;
-=======
-		synames[sycount].var_exists = false;
->>>>>>> Modificacoes do dia 11/06: semantica, var declarada, tipo
 		sycount++;
 	}
 }
@@ -360,7 +356,6 @@ syntno *create_no(const char name, enum syntno_type t, short childcount) {
 
 void print_tree_recursiv(syntno *root) {
 
-<<<<<<< fde3dc1ed33f6885b7853a928a3c7ec86171425f
 	if (root->type == NO_TOK || root->type == NO_PRNT) {
 		targs *args = root->token_args;
 		switch (root->token) {
@@ -376,43 +371,6 @@ void print_tree_recursiv(syntno *root) {
 			case 'P':
 				printf("\tN%d[label=\"PRINT %s\"];\n", root->id, args->varname);
 				break;
-=======
-	// NO_ADD=0, NO_SUB, NO_MULT, NO_DIV, NO_PAR, 
- 	// NO_STMTS, NO_STMT, NO_UNA, NO_ATTR, NO_TOK, NO_PRNT
-	const char *node_names[] = {
-		"NO_ADD", "NO_SUB", "NO_MULT", "NO_DIV", "NO_PAR", 
- 		"NO_STMTS", "NO_STMT", "NO_UNA", "NO_ATTR", "NO_TOK", "NO_PRNT"};
-
-	const char *dt_names[] = {"NONE", "INT", "FLOAT"};
-
-//	if (root->type == NO_TOK || root->type == NO_PRNT || root->type == NO_ATTR) {
-//	}
-//	else {
-		if (root->type == NO_TOK || root->type == NO_PRNT) {
-			targs *args = root->token_args;
-			switch (root->token) {
-				case 'V':
-					printf("\tN%d[label=\"%s dt:%s\"];\n", root->id, args->varname, 
-						dt_names[root->dt]);
-					break;
-				case 'D':
-					printf("\tN%d[label=\"%lf dt:%s\"];\n", root->id, args->constvalue, 
-						dt_names[root->dt]);
-					break;
-				case 'I':
-					printf("\tN%d[label=\"%d dt:%s\"];\n", root->id, (int)args->constvalue, 
-						dt_names[root->dt]);
-					break;
-				case 'P':
-					printf("\tN%d[label=\"PRINT %s\"];\n", root->id, args->varname);
-					break;
-
-			}
-		} else {
-			printf("\tN%d[label=\"%s\"];\n", root->id, node_names[root->type]);
-		}
->>>>>>> Modificacoes do dia 11/06: semantica, var declarada, tipo
-
 		}
 	} else {
 		printf("\tN%d[label=\"%s\"];\n", root->id, node_names[root->type]);
