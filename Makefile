@@ -1,8 +1,9 @@
 LLVMFLAGS=$(shell llvm-config --cxxflags)
-LLVMLIBS=$(shell llvm-config --ldflags --libs) -lncurses -lz
+LLVMLIBS=$(shell llvm-config --ldflags --libs) -lncurses -lz -lpthread
 
 ARDUINOFLAGS=-fdata-sections -ffunction-sections -Wl,--gc-sections
 ARDUINO=atmega328p
+USBPORT=/dev/ttyUSB0
 
 all:
 	flex --yylineno scalc.l
@@ -39,7 +40,7 @@ stdc_avr.o : stdc_avr.cpp
 	avr-objcopy -O ihex $< $@
 
 %.up : %.hex
-	avrdude -C ~/avrdude.conf -P /dev/tty.usbserial -V -carduino -p${ARDUINO} -b57600 -U flash:w:$<:i
+	avrdude -C ~/avrdude.conf -P ${USBPORT} -V -carduino -p${ARDUINO} -b57600 -U flash:w:$<:i
 
 zip:
 	zip calc.zip arduinowire/*.{cpp,c,h} *.{txt,h,l,y,cpp} Makefile 
