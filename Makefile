@@ -1,5 +1,5 @@
-LLVMFLAGS=$(shell llvm-config --cxxflags)
-LLVMLIBS=$(shell llvm-config --ldflags --libs) -lncurses -lz -lpthread
+LLVMFLAGS=$(shell llvm-config-7 --cxxflags)
+LLVMLIBS=$(shell llvm-config-7 --ldflags --libs) -lncurses -lpthread
 
 ARDUINOFLAGS=-fdata-sections -ffunction-sections -Wl,--gc-sections
 ARDUINO=atmega328p
