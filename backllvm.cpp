@@ -96,10 +96,10 @@ void print_llvm_ir() {
 	module->setTargetTriple(TargetTriple);
 
 	llvm::PassBuilder passBuilder(targetMachine);
-	llvm::LoopAnalysisManager loopAnalysisManager(false); // true is just to output debug info
-	llvm::FunctionAnalysisManager functionAnalysisManager(false);
-	llvm::CGSCCAnalysisManager cGSCCAnalysisManager(false);
-	llvm::ModuleAnalysisManager moduleAnalysisManager(false);
+	auto loopAnalysisManager = llvm::LoopAnalysisManager{};
+	auto functionAnalysisManager = llvm::FunctionAnalysisManager{};
+	auto cGSCCAnalysisManager = llvm::CGSCCAnalysisManager{};
+	auto moduleAnalysisManager = llvm::ModuleAnalysisManager{};
 
 	passBuilder.registerModuleAnalyses(moduleAnalysisManager);
 	passBuilder.registerCGSCCAnalyses(cGSCCAnalysisManager);

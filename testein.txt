@@ -1,2 +1,7 @@
 A = IN 10;
-B = IN A;
+IF (A+3 <= 8) {
+	B = IN A;
+} ELSE {
+	B = 5;
+}
+PRINT B;
